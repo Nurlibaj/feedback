@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Обратная связь по уроку с авторизацией</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .rating-card {
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .rating-card:hover {
+      transform: translateY(-4px);
+    }
+    .rating-card.selected {
+      transform: scale(1.03) translateY(-4px);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #cbd5e1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-indigo-50/40 to-blue-50 min-h-screen text-slate-800 antialiased flex flex-col justify-between p-3 sm:p-6 md:p-8">
+
+  <header class="max-w-2xl mx-auto w-full mb-4 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200">
+        <i class="fa-solid fa-graduation-cap text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Отзыв об уроке</h1>
+        <p class="text-xs sm:text-sm text-slate-500 font-medium">Контроль понимания материала каждого ученика</p>
+      </div>
+    </div>
+
+    <!-- Teacher Tools (Protected from students) -->
+    <div class="flex items-center gap-2">
+      <!-- Unlocked toolbar for teacher -->
+      <div id="teacherToolbar" class="hidden flex items-center gap-2">
+        <button id="copyStudentLinkBtn" class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-200 transition-all" title="Скопировать ссылку для отправки в чат класса">
+          <i class="fa-solid fa-link text-xs"></i>
+          <span class="hidden sm:inline">Ссылка для учеников</span>
+        </button>
+        <button id="openProjectorBtn" class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 transition-all" title="Экран контроля сдачи и ссылка">
+          <i class="fa-solid fa-chalkboard-user text-sm"></i>
+          <span class="hidden sm:inline">Экран урока</span>
+        </button>
+        <button id="viewDataBtn" class="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/50 shadow-sm transition-all" title="Журнал отзывов">
+          <i class="fa-solid fa-table-list text-sm"></i>
+        </button>
+        <button id="openSettingsBtn" class="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/50 shadow-sm transition-all" title="База логинов/паролей и Google Таблица">
+          <i class="fa-solid fa-gear text-sm"></i>
+        </button>
+        <button id="lockTeacherBtn" class="p-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all" title="Заблокировать учительскую панель">
+          <i class="fa-solid fa-lock text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Single discreet login button for teacher (visible on PC, hidden for students if in student mode) -->
+      <button id="teacherLoginPromptBtn" class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 hover:text-indigo-600 text-xs font-semibold shadow-sm transition-all" title="Вход в панель учителя">
+        <i class="fa-solid fa-shield-halved text-xs"></i>
+        <span class="hidden sm:inline">Учитель</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto w-full bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden my-auto">
+    
+    <!-- Status banner if Google Sheet URL is missing -->
+    <div id="noWebhookAlert" class="bg-amber-50 border-b border-amber-200 px-5 py-2.5 text-xs text-amber-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-circle-info text-amber-600"></i>
+        <span>Google Таблица не привязана (данные сохраняются локально).</span>
+      </div>
+      <button id="setupNowBtn" class="font-bold underline text-amber-900 hover:text-black">Подключить</button>
+    </div>
+
+    <!-- STUDENT AUTHENTICATION GATEWAY -->
+    <div id="authGateSection" class="p-6 sm:p-8 space-y-6">
+      <div class="text-center space-y-2">
+        <div class="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-md">
+          <i class="fa-solid fa-id-badge"></i>
+        </div>
+        <h2 class="text-xl font-extrabold text-slate-900">Вход для ученика</h2>
+        <p class="text-xs text-slate-500 max-w-sm mx-auto">Введите ваш логин и пароль, выданный учителем</p>
+      </div>
+
+      <!-- Direct Login Form (No class picker tabs) -->
+      <form id="authLoginForm" class="space-y-4 max-w-sm mx-auto">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+            Логин ученика <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative">
+            <input type="text" id="loginUsername" required placeholder="Например: ivanov_a" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 pl-10 text-sm font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all">
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+              <i class="fa-solid fa-user text-xs"></i>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+            Пароль <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative">
+            <input type="password" id="loginPassword" required placeholder="Введите пароль" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 pl-10 pr-10 text-sm font-medium tracking-wider text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all">
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+              <i class="fa-solid fa-lock text-xs"></i>
+            </div>
+            <button type="button" class="toggle-pin-btn absolute inset-y-0 right-0 px-3.5 flex items-center text-slate-400 hover:text-slate-600">
+              <i class="fa-regular fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2">
+          <span>Войти и оставить отзыв</span>
+          <i class="fa-solid fa-arrow-right text-xs"></i>
+        </button>
+      </form>
+    </div>
+
+    <div id="formSection" class="hidden p-6 sm:p-8">
+      
+      <!-- Active student profile card -->
+      <div class="mb-5 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-2xl flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
+            <i class="fa-solid fa-user-check text-xs"></i>
+          </div>
+          <div>
+            <div class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Ученик</div>
+            <div class="font-extrabold text-indigo-950 text-sm flex items-center gap-2">
+              <span id="activeUserName"></span>
+              <span id="activeUserClass" class="px-2 py-0.5 rounded-full bg-indigo-200/60 text-indigo-800 text-[11px] font-bold"></span>
+            </div>
+          </div>
+        </div>
+        <button id="logoutUserBtn" type="button" class="text-slate-400 hover:text-rose-600 text-xs font-semibold px-2 py-1 rounded-lg hover:bg-rose-50 transition-all">
+          <i class="fa-solid fa-right-from-bracket mr-1"></i>Сменить
+        </button>
+      </div>
+
+      <form id="feedbackForm" class="space-y-6">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Lesson Topic -->
+          <div>
+            <label for="lessonTopic" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              1. Тема урока <span class="text-rose-500">*</span>
+            </label>
+            <div class="relative">
+              <input type="text" id="lessonTopic" required placeholder="Например: Квадратные уравнения" class="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 pl-10 text-sm font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                <i class="fa-solid fa-book-open text-xs"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Teacher selector (optional, if several teachers use the same form) -->
+          <div>
+            <label for="teacherSelect" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              2. Учитель / Предмет
+            </label>
+            <div class="relative">
+              <select id="teacherSelect" class="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-sm font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all">
+                <option value="" selected>Текущий учитель</option>
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                <i class="fa-solid fa-chevron-down text-xs"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3-tier Rating Cards -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+            3. Как прошёл урок? <span class="text-rose-500">*</span>
+          </label>
+          <div class="grid grid-cols-3 gap-2.5 sm:gap-4">
+            
+            <!-- Rating: Good -->
+            <label class="cursor-pointer">
+              <input type="radio" name="rating" value="Хорошо" class="peer sr-only" required>
+              <div class="rating-card p-3 sm:p-4 rounded-2xl border-2 border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/20 text-center peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:shadow-md peer-checked:shadow-emerald-100 flex flex-col items-center justify-center gap-1.5">
+                <span class="text-3xl sm:text-4xl filter drop-shadow">😊</span>
+                <span class="font-bold text-xs sm:text-sm text-slate-700 peer-checked:text-emerald-700">Хорошо</span>
+                <span class="text-[10px] sm:text-xs text-slate-400 hidden sm:inline">Всё понял(а)</span>
+              </div>
+            </label>
+
+            <!-- Rating: Average -->
+            <label class="cursor-pointer">
+              <input type="radio" name="rating" value="Средне" class="peer sr-only">
+              <div class="rating-card p-3 sm:p-4 rounded-2xl border-2 border-slate-200 bg-white hover:border-amber-300 hover:bg-amber-50/20 text-center peer-checked:border-amber-500 peer-checked:bg-amber-50 peer-checked:shadow-md peer-checked:shadow-amber-100 flex flex-col items-center justify-center gap-1.5">
+                <span class="text-3xl sm:text-4xl filter drop-shadow">😐</span>
+                <span class="font-bold text-xs sm:text-sm text-slate-700 peer-checked:text-amber-700">Средне</span>
+                <span class="text-[10px] sm:text-xs text-slate-400 hidden sm:inline">Есть вопросы</span>
+              </div>
+            </label>
+
+            <!-- Rating: Bad -->
+            <label class="cursor-pointer">
+              <input type="radio" name="rating" value="Плохо" class="peer sr-only">
+              <div class="rating-card p-3 sm:p-4 rounded-2xl border-2 border-slate-200 bg-white hover:border-rose-300 hover:bg-rose-50/20 text-center peer-checked:border-rose-500 peer-checked:bg-rose-50 peer-checked:shadow-md peer-checked:shadow-rose-100 flex flex-col items-center justify-center gap-1.5">
+                <span class="text-3xl sm:text-4xl filter drop-shadow">🙁</span>
+                <span class="font-bold text-xs sm:text-sm text-slate-700 peer-checked:text-rose-700">Плохо</span>
+                <span class="text-[10px] sm:text-xs text-slate-400 hidden sm:inline">Было сложно</span>
+              </div>
+            </label>
+
+          </div>
+        </div>
+
+        <!-- Detailed Feedback -->
+        <div>
+          <label for="feedbackDetail" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+            4. Подробная обратная связь <span class="text-slate-400 font-normal lowercase">(что понравилось, что разобрать снова?)</span>
+          </label>
+          <textarea id="feedbackDetail" rows="3" placeholder="Мне очень понравилось практическое задание, но формула во второй задаче осталась непонятной..." class="w-full rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5 text-sm font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all resize-none"></textarea>
+        </div>
+
+        <!-- Anonymity Option (Protects psychological safety while logging attendance) -->
+        <div class="flex items-center justify-between text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="isBlindCheck" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer">
+            <label for="isBlindCheck" class="font-medium text-slate-700 cursor-pointer select-none">
+              Скрыть моё имя в комментарии (учитель увидит, что я сдал, но не свяжет меня с оценкой)
+            </label>
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" id="submitBtn" class="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-bold text-sm sm:text-base shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transition-all flex items-center justify-center gap-2">
+            <span id="submitBtnText">Отправить отзыв учителю</span>
+            <i id="submitBtnIcon" class="fa-solid fa-paper-plane text-xs"></i>
+          </button>
+        </div>
+
+      </form>
+    </div>
+
+    <div id="successSection" class="hidden p-8 text-center space-y-5">
+      <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-4xl shadow-lg shadow-emerald-100">
+        <i class="fa-solid fa-check"></i>
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-slate-900">Спасибо, <span id="successStudentName"></span>!</h2>
+        <p class="text-slate-500 text-sm mt-1 max-w-md mx-auto">Твой «билетик на выход» зачтён учителем. Следующий урок станет ещё полезнее!</p>
+      </div>
+
+      <div class="pt-4 flex justify-center gap-3">
+        <button id="newFeedbackBtn" class="px-6 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm transition-all shadow-md">
+          Выйти из аккаунта
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="max-w-2xl mx-auto w-full text-center text-xs text-slate-400 mt-4">
+    Система поурочной обратной связи • Авторизованный вход по классам
+  </footer>
+
+  <!-- Teacher Auth Modal -->
+  <div id="teacherAuthModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+      <div class="text-center space-y-1">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto text-xl mb-2">
+          <i class="fa-solid fa-shield-cat"></i>
+        </div>
+        <h3 class="text-lg font-extrabold text-slate-900">Доступ для учителя</h3>
+        <p class="text-xs text-slate-500">Введите мастер-пароль кабинета учителя</p>
+      </div>
+
+      <form id="teacherLoginForm" class="space-y-3">
+        <div class="relative">
+          <input type="password" id="teacherPasswordInput" placeholder="Пароль учителя (по умолч.: 1234)" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 pl-10 text-sm font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none">
+          <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+            <i class="fa-solid fa-key text-xs"></i>
+          </div>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="closeTeacherAuthBtn" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50">
+            Отмена
+          </button>
+          <button type="submit" class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-100">
+            Войти
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="projectorModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4 sm:p-6">
+    <div class="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] p-6 sm:p-8 flex flex-col shadow-2xl relative overflow-hidden">
+      
+      <button id="closeProjectorBtn" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-all z-10">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+        <div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-1">
+            <i class="fa-solid fa-ticket"></i> Экран учителя
+          </span>
+          <h3 class="text-2xl font-black text-slate-900">Контроль сдачи отзывов (Exit Ticket)</h3>
+        </div>
+
+        <!-- Filter live checklist by class -->
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-bold text-slate-500">Класс на уроке:</label>
+          <select id="projectorClassSelect" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-indigo-700 focus:bg-white focus:outline-none">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-6 py-4 overflow-y-auto custom-scrollbar flex-1">
+        
+        <!-- Left column: Direct Link & optional QR -->
+        <div class="md:col-span-5 flex flex-col justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div class="space-y-3">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1">Прямая ссылка для учеников:</span>
+              <p class="text-[11px] text-slate-400">Отправьте эту ссылку в чат класса (WhatsApp, Telegram, Сферум, Эл. дневник):</p>
+            </div>
+
+            <!-- Big Click-to-copy button -->
+            <button id="bigCopyStudentLinkBtn" class="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-2">
+              <i class="fa-regular fa-copy text-sm"></i>
+              <span>Скопировать ссылку для учеников</span>
+            </button>
+
+            <!-- Link preview box -->
+            <div class="p-2.5 bg-white border border-slate-200 rounded-xl">
+              <p id="qrUrlDisplay" class="text-xs text-indigo-600 font-mono break-all select-all font-medium cursor-pointer hover:text-indigo-800" title="Нажмите, чтобы скопировать"></p>
+            </div>
+          </div>
+
+          <!-- Collapsible QR code for those who still prefer camera scanning -->
+          <details class="mt-4 pt-3 border-t border-slate-200/80 group">
+            <summary class="text-xs font-bold text-slate-600 cursor-pointer flex items-center justify-between hover:text-indigo-600 select-none">
+              <span><i class="fa-solid fa-qrcode mr-1.5 text-indigo-500"></i> Или показать QR-код</span>
+              <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-open:rotate-180 transition-transform"></i>
+            </summary>
+            <div class="mt-3 flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-200">
+              <img id="qrImage" src="" alt="QR-код формы" class="w-36 h-36 object-contain rounded-lg">
+              <span class="text-[10px] text-slate-400 mt-1">Для сканирования камерой телефона</span>
+            </div>
+          </details>
+        </div>
+
+        <!-- Right column: Live Student Checklist (Who submitted vs Who hasn't) -->
+        <div class="md:col-span-7 flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="font-bold text-sm text-slate-800 flex items-center gap-2">
+              <span>Список учеников класса</span>
+              <span id="submittedFractionBadge" class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-extrabold">0 / 0</span>
+            </h4>
+            <span class="text-[11px] text-emerald-600 font-bold flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> В реальном времени
+            </span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="w-full bg-slate-100 rounded-full h-2.5 mb-3 overflow-hidden">
+            <div id="projectorProgressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+
+          <!-- Scrollable student roster with submission checkmarks -->
+          <div id="projectorStudentsList" class="space-y-2 overflow-y-auto max-h-[300px] pr-1 custom-scrollbar">
+            <!-- Populated dynamically: [✅ Иванов Артём] or [⏳ Смирнов Даниил] -->
+          </div>
+        </div>
+
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+        <div>💡 Отпускайте класс на перемену, когда шкала заполнится на 100%.</div>
+        <button id="resetSessionCounterBtn" class="text-rose-500 hover:text-rose-700 font-semibold hover:underline">Сбросить отметки текущего урока</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="settingsModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div class="flex items-center gap-2 text-indigo-600 font-bold">
+          <i class="fa-solid fa-users-gear"></i>
+          <span class="text-slate-900">Управление учениками и настройки</span>
+        </div>
+        <button id="closeSettingsBtn" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
+
+        <!-- STUDENT MANAGEMENT SECTION -->
+        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-user-plus text-indigo-600"></i>
+              <span>Как добавить учеников</span>
+            </h4>
+            <span id="totalStudentsCountBadge" class="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">Учеников: 0</span>
+          </div>
+
+          <!-- Quick Add Single Student Form -->
+          <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-sm space-y-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Быстро добавить одного ученика:</span>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <input type="text" id="quickAddClass" placeholder="Класс (7-А)" class="text-xs rounded-lg border border-slate-200 p-2 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:outline-none">
+              <input type="text" id="quickAddName" placeholder="ФИО ученика" class="text-xs rounded-lg border border-slate-200 p-2 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:outline-none">
+              <input type="text" id="quickAddLogin" placeholder="Логин (ivanov)" class="text-xs rounded-lg border border-slate-200 p-2 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:outline-none">
+              <input type="text" id="quickAddPass" placeholder="Пароль (1234)" class="text-xs rounded-lg border border-slate-200 p-2 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:outline-none">
+            </div>
+            <div class="flex justify-end pt-1">
+              <button type="button" id="quickAddStudentBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all">
+                <i class="fa-solid fa-plus text-[10px]"></i> Добавить в базу
+              </button>
+            </div>
+          </div>
+
+          <!-- Bulk Paste / Editor for Entire List -->
+          <div>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Массовый список учеников (из Excel / журнала)
+              </label>
+              <span class="text-[11px] text-slate-400">Формат: <code class="text-indigo-600 font-bold">Класс; ФИО; Логин; Пароль</code></span>
+            </div>
+            <textarea id="studentsDbTextarea" rows="7" class="w-full text-xs font-mono rounded-xl border border-slate-200 p-3 bg-white focus:border-indigo-500 focus:outline-none custom-scrollbar leading-relaxed" placeholder="7-А; Иванов Артём; ivanov_a; 1111
+7-А; Смирнова Анна; smirnova_a; 2222"></textarea>
+            
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-2">
+              <button type="button" id="autoGenerateCredentialsBtn" class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                <i class="fa-solid fa-wand-magic-sparkles text-xs"></i> Автоматически создать логины и 4-значные пароли
+              </button>
+              <button type="button" id="resetToDefaultStudentsBtn" class="text-[11px] text-slate-400 hover:text-slate-600 underline">
+                Восстановить пример
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Google Apps Script URL -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+            URL Google Таблицы (Apps Script Webhook)
+          </label>
+          <input type="url" id="webhookUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs rounded-xl border border-slate-200 p-3 font-mono bg-slate-50 focus:bg-white focus:border-indigo-500 focus:outline-none">
+        </div>
+
+        <!-- Teachers list -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+            Список учителей и предметов (через запятую)
+          </label>
+          <input type="text" id="teachersEditInput" class="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:outline-none">
+        </div>
+
+        <!-- Teacher Master PIN -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+            Мастер-пароль учителя (для скрытия панели от учеников)
+          </label>
+          <input type="text" id="teacherMasterPinInput" value="1234" class="w-full text-xs rounded-xl border border-slate-200 p-2.5 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:outline-none font-mono">
+        </div>
+
+        <!-- Google Apps Script Code Accordion -->
+        <details class="bg-slate-50 rounded-2xl border border-slate-200 p-3.5 text-xs group">
+          <summary class="font-bold text-slate-800 cursor-pointer flex items-center justify-between">
+            <span><i class="fa-brands fa-google text-emerald-600 mr-1.5"></i> Код для Google Таблицы (Apps Script)</span>
+            <i class="fa-solid fa-chevron-down text-slate-400 group-open:rotate-180 transition-transform"></i>
+          </summary>
+          <div class="mt-3 space-y-2">
+            <p class="text-[11px] text-slate-500">Вставьте этот код в <strong>Расширения → Apps Script</strong> вашей Google Таблицы:</p>
+            <div class="relative">
+              <pre class="bg-slate-900 text-indigo-200 text-[10px] p-3 rounded-xl overflow-x-auto font-mono max-h-36 selection:bg-indigo-600" id="scriptCodeBlock">function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(["Дата и время", "Класс", "Учитель", "Тема", "Оценка", "Подробности", "Ученик", "Логин"]);
+    }
+    sheet.appendRow([
+      new Date().toLocaleString("ru-RU"),
+      data.className || "",
+      data.teacher || "",
+      data.topic || "",
+      data.rating || "",
+      data.detail || "",
+      data.studentName || "",
+      data.login || ""
+    ]);
+    return ContentService.createTextOutput(JSON.stringify({ "status": "success" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ "status": "error", "message": err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}</pre>
+              <button id="copyScriptBtn" type="button" class="absolute top-2 right-2 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] font-medium backdrop-blur">
+                <i class="fa-regular fa-copy mr-1"></i>Копировать
+              </button>
+            </div>
+          </div>
+        </details>
+
+      </div>
+
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+        <button id="saveSettingsBtn" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-100 transition-all">
+          Сохранить настройки
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dataModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-slate-900">Журнал собранных отзывов</h3>
+          <p class="text-xs text-slate-400">Сохранено локально и готово к выгрузке</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="exportCsvBtn" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-file-csv"></i> Скачать CSV
+          </button>
+          <button id="closeDataBtn" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-4 overflow-y-auto flex-1 custom-scrollbar">
+        <div id="reviewsList" class="space-y-3"></div>
+        <div id="emptyReviewsNote" class="text-center py-12 text-slate-400 text-sm hidden">
+          <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300 block"></i>
+          Пока нет ни одного отзыва.
+        </div>
+      </div>
+
+      <div class="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+        <span id="reviewsCountText">Всего: 0</span>
+        <button id="clearDataBtn" class="text-rose-500 hover:text-rose-700 font-semibold hover:underline">Очистить список</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast notification banner -->
+  <div id="toastNotification" class="fixed bottom-5 right-5 max-w-sm bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3 text-xs">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+    <span id="toastMessage">Уведомление</span>
+  </div>
+
+  <script>
+    // Initial Seed Database of Students with Logins & Passwords (PINs)
+    const DEFAULT_STUDENTS_RAW = `7-А; Иванов Артём; ivanov_a; 1111
+7-А; Смирнова Анна; smirnova_a; 2222
+7-А; Кузнецов Даниил; kuznetsov_d; 3333
+7-А; Попова София; popova_s; 4444
+7-А; Васильев Михаил; vasiliev_m; 5555
+7-А; Новикова Виктория; novikova_v; 6666
+7-Б; Морозов Егор; morozov_e; 1234
+7-Б; Волкова Полина; volkova_p; 2345
+7-Б; Алексеев Тимофей; alekseev_t; 3456
+8-А; Павлов Максим; pavlov_m; 1001
+8-А; Семенова Алиса; semenova_a; 1002`;
+
+    const DEFAULT_TEACHERS = [
+      'Иванова А. С. (Математика)',
+      'Петров В. М. (Физика)',
+      'Смирнова Е. В. (Русский язык)',
+      'Сидоров А. П. (История)',
+      'Кузнецова О. И. (Биология)',
+      'Алексеев Д. Н. (Информатика)',
+      'Ким Н. В. (Английский язык)'
+    ];
+
+    // State
+    let studentsDatabase = []; // Array of { id, class, name, login, pass }
+    let teachersList = [...DEFAULT_TEACHERS];
+    let webhookUrl = '';
+    let teacherMasterPassword = '1234';
+    let isTeacherAuthenticated = false;
+    let currentAuthUser = null; // Currently logged in student object
+    let submittedUserIds = new Set(); // Set of student logins who submitted during the lesson session
+    let localReviews = [];
+
+    // Parse RAW student lines
+    function parseStudentsDatabase(rawText) {
+      const lines = rawText.split('\n');
+      const parsed = [];
+      lines.forEach((line, idx) => {
+        const parts = line.split(';').map(p => p.trim());
+        if (parts.length >= 4 && parts[0] && parts[1]) {
+          parsed.push({
+            id: `std_${idx}`,
+            className: parts[0],
+            name: parts[1],
+            login: parts[2].toLowerCase(),
+            pass: parts[3]
+          });
+        }
+      });
+      return parsed;
+    }
+
+    studentsDatabase = parseStudentsDatabase(DEFAULT_STUDENTS_RAW);
+
+    // DOM Elements
+    const authGateSection = document.getElementById('authGateSection');
+    const formSection = document.getElementById('formSection');
+    const successSection = document.getElementById('successSection');
+
+    // Auth Elements
+    const authLoginForm = document.getElementById('authLoginForm');
+    const loginUsername = document.getElementById('loginUsername');
+    const loginPassword = document.getElementById('loginPassword');
+
+    const activeUserName = document.getElementById('activeUserName');
+    const activeUserClass = document.getElementById('activeUserClass');
+    const logoutUserBtn = document.getElementById('logoutUserBtn');
+    const successStudentName = document.getElementById('successStudentName');
+    const newFeedbackBtn = document.getElementById('newFeedbackBtn');
+
+    // Form elements
+    const feedbackForm = document.getElementById('feedbackForm');
+    const teacherSelect = document.getElementById('teacherSelect');
+    const lessonTopic = document.getElementById('lessonTopic');
+    const feedbackDetail = document.getElementById('feedbackDetail');
+    const isBlindCheck = document.getElementById('isBlindCheck');
+    const submitBtn = document.getElementById('submitBtn');
+    const submitBtnText = document.getElementById('submitBtnText');
+
+    // Projector Elements
+    const projectorModal = document.getElementById('projectorModal');
+    const openProjectorBtn = document.getElementById('openProjectorBtn');
+    const closeProjectorBtn = document.getElementById('closeProjectorBtn');
+    const qrImage = document.getElementById('qrImage');
+    const qrUrlDisplay = document.getElementById('qrUrlDisplay');
+    const projectorClassSelect = document.getElementById('projectorClassSelect');
+    const projectorStudentsList = document.getElementById('projectorStudentsList');
+    const submittedFractionBadge = document.getElementById('submittedFractionBadge');
+    const projectorProgressBar = document.getElementById('projectorProgressBar');
+    const resetSessionCounterBtn = document.getElementById('resetSessionCounterBtn');
+
+    // Settings Elements
+    const settingsModal = document.getElementById('settingsModal');
+    // Check if opened as Student via QR code or Link
+    const urlParams = new URLSearchParams(window.location.search);
+    const isStudentMode = urlParams.get('student') === '1';
+
+    if (isStudentMode) {
+      // In student mode, hide teacher entry button completely and hide status alerts
+      teacherLoginPromptBtn.classList.add('hidden');
+      if (noWebhookAlert) noWebhookAlert.classList.add('hidden');
+    }
+
+    // Copy student link helper function (uses document.execCommand for safe iframe/browser execution)
+    function copyStudentDirectLink() {
+      const baseUrl = window.location.origin + window.location.pathname;
+      const studentUrl = `${baseUrl}?student=1`;
+      
+      const tempTextarea = document.createElement('textarea');
+      tempTextarea.value = studentUrl;
+      document.body.appendChild(tempTextarea);
+      tempTextarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempTextarea);
+      showToast('Ссылка для учеников скопирована! Можно отправлять в чат');
+    }
+
+    // Teacher link copy buttons
+    const copyStudentLinkBtn = document.getElementById('copyStudentLinkBtn');
+    const bigCopyStudentLinkBtn = document.getElementById('bigCopyStudentLinkBtn');
+    if (copyStudentLinkBtn) copyStudentLinkBtn.addEventListener('click', copyStudentDirectLink);
+    if (bigCopyStudentLinkBtn) bigCopyStudentLinkBtn.addEventListener('click', copyStudentDirectLink);
+
+    // Teacher login handling
+    teacherLoginPromptBtn.addEventListener('click', () => {
+      teacherPasswordInput.value = '';
+      teacherAuthModal.classList.remove('hidden');
+      teacherPasswordInput.focus();
+    });
+
+    closeTeacherAuthBtn.addEventListener('click', () => {
+      teacherAuthModal.classList.add('hidden');
+    });
+
+    teacherLoginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const enteredPass = teacherPasswordInput.value.trim();
+      if (enteredPass === teacherMasterPassword) {
+        isTeacherAuthenticated = true;
+        teacherToolbar.classList.remove('hidden');
+        teacherLoginPromptBtn.classList.add('hidden');
+        teacherAuthModal.classList.add('hidden');
+        showToast('Панель учителя активирована');
+      } else {
+        showToast('Неверный пароль учителя!', 'error');
+      }
+    });
+
+    lockTeacherBtn.addEventListener('click', () => {
+      isTeacherAuthenticated = false;
+      teacherToolbar.classList.add('hidden');
+      teacherLoginPromptBtn.classList.remove('hidden');
+      showToast('Панель учителя заблокирована', 'info');
+    });
+
+    // Data Modal Elements
+    const dataModal = document.getElementById('dataModal');
+    const viewDataBtn = document.getElementById('viewDataBtn');
+    const closeDataBtn = document.getElementById('closeDataBtn');
+    const reviewsList = document.getElementById('reviewsList');
+    const emptyReviewsNote = document.getElementById('emptyReviewsNote');
+    const reviewsCountText = document.getElementById('reviewsCountText');
+    const clearDataBtn = document.getElementById('clearDataBtn');
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toastNotification');
+      const toastMessage = document.getElementById('toastMessage');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMessage.textContent = message;
+      if (type === 'error') {
+        toastIcon.className = 'fa-solid fa-circle-exclamation text-rose-400 text-base';
+      } else if (type === 'info') {
+        toastIcon.className = 'fa-solid fa-circle-info text-blue-400 text-base';
+      } else {
+        toastIcon.className = 'fa-solid fa-circle-check text-emerald-400 text-base';
+      }
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    // Toggle PIN visibility helper
+    document.querySelectorAll('.toggle-pin-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const input = e.currentTarget.parentElement.querySelector('input');
+        const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+        input.setAttribute('type', type);
+        e.currentTarget.innerHTML = type === 'password' ? '<i class="fa-regular fa-eye"></i>' : '<i class="fa-regular fa-eye-slash"></i>';
+      });
+    });
+
+    // Populate Class select dropdowns from DB
+    function populateDropdowns() {
+      const uniqueClasses = [...new Set(studentsDatabase.map(s => s.className))].sort();
+
+      // Projector Class Select
+      projectorClassSelect.innerHTML = '';
+      uniqueClasses.forEach(cls => {
+        const opt = document.createElement('option');
+        opt.value = cls;
+        opt.textContent = cls;
+        projectorClassSelect.appendChild(opt);
+      });
+
+      // Teachers Select
+      teacherSelect.innerHTML = '<option value="" selected>Текущий учитель</option>';
+      teachersList.forEach(tch => {
+        const opt = document.createElement('option');
+        opt.value = tch;
+        opt.textContent = tch;
+        teacherSelect.appendChild(opt);
+      });
+    }
+
+    function authenticateStudent(login, password) {
+      const student = studentsDatabase.find(s => s.login === login.toLowerCase());
+      if (!student) {
+        showToast('Пользователь с таким логином не найден', 'error');
+        return false;
+      }
+      if (student.pass !== password) {
+        showToast('Неверный пароль! Уточните у учителя.', 'error');
+        return false;
+      }
+      if (submittedUserIds.has(student.login)) {
+        showToast(`Ученик ${student.name} уже отправил отзыв на этом уроке!`, 'error');
+        return false;
+      }
+
+      currentAuthUser = student;
+      activeUserName.textContent = student.name;
+      activeUserClass.textContent = student.className;
+
+      authGateSection.classList.add('hidden');
+      formSection.classList.remove('hidden');
+      showToast(`Добро пожаловать, ${student.name}!`);
+      return true;
+    }
+
+    authLoginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const login = loginUsername.value.trim();
+      const pass = loginPassword.value.trim();
+      authenticateStudent(login, pass);
+    });
+
+    logoutUserBtn.addEventListener('click', () => {
+      currentAuthUser = null;
+      formSection.classList.add('hidden');
+      authGateSection.classList.remove('hidden');
+      loginPassword.value = '';
+      showToast('Вы вышли из системы', 'info');
+    });
+
+    feedbackForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!currentAuthUser) {
+        showToast('Ошибка сессии, пожалуйста авторизуйтесь снова', 'error');
+        return;
+      }
+
+      const selectedRating = document.querySelector('input[name="rating"]:checked');
+      if (!selectedRating) {
+        showToast('Пожалуйста, выберите оценку урока', 'error');
+        return;
+      }
+
+      // If student chose blind mode: their name is hidden from public comment,
+      // but their attendance is recorded!
+      const isBlind = isBlindCheck.checked;
+      const recordedStudentName = isBlind 
+        ? `Анонимно (сдано: ${currentAuthUser.name.split(' ')[0]})` 
+        : currentAuthUser.name;
+
+      const payload = {
+        timestamp: new Date().toISOString(),
+        className: currentAuthUser.className,
+        teacher: teacherSelect.value || 'Учитель',
+        topic: lessonTopic.value.trim(),
+        rating: selectedRating.value,
+        detail: feedbackDetail.value.trim() || 'Без комментариев',
+        studentName: recordedStudentName,
+        login: currentAuthUser.login
+      };
+
+      // Mark student as submitted for this lesson session
+      submittedUserIds.add(currentAuthUser.login);
+
+      submitBtn.disabled = true;
+      submitBtnText.textContent = 'Отправка отзыва...';
+
+      // Always save to local journal
+      localReviews.unshift(payload);
+
+      // Attempt Google Apps Script Webhook
+      let sheetSent = false;
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          sheetSent = true;
+        } catch (err) {
+          console.warn('Webhook error:', err);
+        }
+      }
+
+      submitBtn.disabled = false;
+      submitBtnText.textContent = 'Отправить отзыв учителю';
+
+      // Switch to success screen
+      formSection.classList.add('hidden');
+      successStudentName.textContent = currentAuthUser.name;
+      successSection.classList.remove('hidden');
+
+      updateProjectorView();
+
+      if (sheetSent) {
+        showToast('Отзыв успешно записан в Google Таблицу!');
+      } else {
+        showToast('Отзыв зафиксирован!');
+      }
+    });
+
+    newFeedbackBtn.addEventListener('click', () => {
+      currentAuthUser = null;
+      feedbackForm.reset();
+      successSection.classList.add('hidden');
+      authGateSection.classList.remove('hidden');
+      loginPassword.value = '';
+    });
+
+    function updateProjectorView() {
+      const selectedClass = projectorClassSelect.value;
+      if (!selectedClass) return;
+
+      const classStudents = studentsDatabase.filter(s => s.className === selectedClass);
+      const totalInClass = classStudents.length;
+      let submittedCount = 0;
+
+      projectorStudentsList.innerHTML = '';
+
+      classStudents.forEach(st => {
+        const hasSubmitted = submittedUserIds.has(st.login);
+        if (hasSubmitted) submittedCount++;
+
+        const row = document.createElement('div');
+        row.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
+          hasSubmitted 
+            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900 font-bold' 
+            : 'bg-white border-slate-200 text-slate-600'
+        }`;
+
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+              hasSubmitted ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+            }">
+              <i class="fa-solid ${hasSubmitted ? 'fa-check' : 'fa-hourglass-start'}"></i>
+            </span>
+            <span>${st.name}</span>
+          </div>
+          <span class="text-[11px] ${hasSubmitted ? 'text-emerald-700 font-bold' : 'text-slate-400 font-normal'}">
+            ${hasSubmitted ? 'Сдал(а) ✅' : 'Ожидание...'}
+          </span>
+        `;
+        projectorStudentsList.appendChild(row);
+      });
+
+      // Update counter and progress bar
+      submittedFractionBadge.textContent = `${submittedCount} из ${totalInClass}`;
+      const percentage = totalInClass > 0 ? Math.round((submittedCount / totalInClass) * 100) : 0;
+      projectorProgressBar.style.width = `${percentage}%`;
+
+      if (percentage === 100) {
+        projectorProgressBar.className = 'bg-emerald-500 h-2.5 rounded-full transition-all duration-500';
+      } else {
+        projectorProgressBar.className = 'bg-indigo-600 h-2.5 rounded-full transition-all duration-500';
+      }
+    }
+
+    projectorClassSelect.addEventListener('change', updateProjectorView);
+
+    function openProjector() {
+      // Create student-specific URL with student=1 param to guarantee no teacher buttons show on their phones
+      const baseUrl = window.location.origin + window.location.pathname;
+      const studentUrl = `${baseUrl}?student=1`;
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(studentUrl)}`;
+      
+      qrImage.src = qrApiUrl;
+      qrUrlDisplay.textContent = studentUrl;
+      qrUrlDisplay.dataset.url = studentUrl;
+
+      updateProjectorView();
+      projectorModal.classList.remove('hidden');
+    }
+
+    openProjectorBtn.addEventListener('click', openProjector);
+    closeProjectorBtn.addEventListener('click', () => {
+      projectorModal.classList.add('hidden');
+    });
+
+    qrUrlDisplay.addEventListener('click', () => {
+      copyStudentDirectLink();
+    });
+
+    resetSessionCounterBtn.addEventListener('click', () => {
+      submittedUserIds.clear();
+      updateProjectorView();
+      showToast('Отметки присутствия сброшены для нового урока', 'info');
+    });
+
+    // Quick Add Single Student Inputs
+    const quickAddClass = document.getElementById('quickAddClass');
+    const quickAddName = document.getElementById('quickAddName');
+    const quickAddLogin = document.getElementById('quickAddLogin');
+    const quickAddPass = document.getElementById('quickAddPass');
+    const quickAddStudentBtn = document.getElementById('quickAddStudentBtn');
+    const totalStudentsCountBadge = document.getElementById('totalStudentsCountBadge');
+    const autoGenerateCredentialsBtn = document.getElementById('autoGenerateCredentialsBtn');
+    const resetToDefaultStudentsBtn = document.getElementById('resetToDefaultStudentsBtn');
+
+    function updateStudentBadge() {
+      if (totalStudentsCountBadge) {
+        totalStudentsCountBadge.textContent = `Учеников: ${studentsDatabase.length}`;
+      }
+    }
+
+    // Helper transliteration for auto-generating logins
+    function transliterate(str) {
+      const ru = {
+        'а':'a', 'б':'b', 'в':'v', 'г':'g', 'д':'d', 'е':'e', 'ё':'yo', 'ж':'zh',
+        'з':'z', 'и':'i', 'й':'y', 'к':'k', 'л':'l', 'м':'m', 'н':'n', 'о':'o',
+        'п':'p', 'р':'r', 'с':'s', 'т':'t', 'у':'u', 'ф':'f', 'х':'kh', 'ц':'ts',
+        'ч':'ch', 'ш':'sh', 'щ':'shch', 'ъ':'', 'ы':'y', 'ь':'', 'э':'e', 'ю':'yu',
+        'я':'ya'
+      };
+      return str.toLowerCase().split('').map(char => ru[char] || char).join('').replace(/[^a-z0-9]/g, '');
+    }
+
+    // Quick add single student click handler
+    quickAddStudentBtn.addEventListener('click', () => {
+      const cls = quickAddClass.value.trim();
+      const name = quickAddName.value.trim();
+      let login = quickAddLogin.value.trim().toLowerCase();
+      let pass = quickAddPass.value.trim();
+
+      if (!cls || !name) {
+        showToast('Укажите класс и ФИО ученика!', 'error');
+        return;
+      }
+
+      if (!login) {
+        const parts = name.split(/\s+/);
+        const surname = parts[0] || 'student';
+        const init = parts[1] ? parts[1][0] : '';
+        login = transliterate(surname + (init ? '_' + init : ''));
+      }
+
+      if (!pass) {
+        pass = Math.floor(1000 + Math.random() * 9000).toString();
+      }
+
+      const newLine = `${cls}; ${name}; ${login}; ${pass}`;
+      const curText = studentsDbTextarea.value.trim();
+      studentsDbTextarea.value = curText ? `${curText}\n${newLine}` : newLine;
+
+      // Clear inputs
+      quickAddName.value = '';
+      quickAddLogin.value = '';
+      quickAddPass.value = '';
+
+      showToast(`Ученик ${name} добавлен в список!`);
+    });
+
+    // Auto-generate missing logins & pins from a simple list (e.g. if user just pasted "7-А; Иванов Артём")
+    autoGenerateCredentialsBtn.addEventListener('click', () => {
+      const lines = studentsDbTextarea.value.split('\n');
+      const updatedLines = [];
+      let generatedCount = 0;
+
+      lines.forEach((line) => {
+        const parts = line.split(';').map(p => p.trim());
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+          const cls = parts[0];
+          const name = parts[1];
+          let login = parts[2] || '';
+          let pass = parts[3] || '';
+
+          if (!login) {
+            const nameParts = name.split(/\s+/);
+            const surname = nameParts[0] || 'user';
+            const init = nameParts[1] ? nameParts[1][0] : '';
+            login = transliterate(surname + (init ? '_' + init : ''));
+            generatedCount++;
+          }
+          if (!pass) {
+            pass = Math.floor(1000 + Math.random() * 9000).toString();
+            generatedCount++;
+          }
+          updatedLines.push(`${cls}; ${name}; ${login}; ${pass}`);
+        } else if (line.trim()) {
+          updatedLines.push(line);
+        }
+      });
+
+      studentsDbTextarea.value = updatedLines.join('\n');
+      showToast(generatedCount > 0 ? 'Логины и пароли сгенерированы!' : 'У всех учеников уже есть логины и пароли', 'info');
+    });
+
+    resetToDefaultStudentsBtn.addEventListener('click', () => {
+      studentsDbTextarea.value = DEFAULT_STUDENTS_RAW;
+      showToast('Список сброшен к исходному примеру');
+    });
+
+    function openSettings() {
+      webhookUrlInput.value = webhookUrl;
+      teachersEditInput.value = teachersList.join(', ');
+      teacherMasterPinInput.value = teacherMasterPassword;
+      updateStudentBadge();
+      
+      // Serialize current student database to editable text format
+      const serialized = studentsDatabase.map(s => 
+        `${s.className}; ${s.name}; ${s.login}; ${s.pass}`
+      ).join('\n');
+
+      studentsDbTextarea.value = serialized;
+      settingsModal.classList.remove('hidden');
+    }
+
+    openSettingsBtn.addEventListener('click', openSettings);
+    setupNowBtn.addEventListener('click', openSettings);
+    closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
+
+    saveSettingsBtn.addEventListener('click', () => {
+      webhookUrl = webhookUrlInput.value.trim();
+
+      const parsedTeachers = teachersEditInput.value.split(',').map(t => t.trim()).filter(Boolean);
+      if (parsedTeachers.length > 0) teachersList = parsedTeachers;
+
+      if (teacherMasterPinInput.value.trim()) {
+        teacherMasterPassword = teacherMasterPinInput.value.trim();
+      }
+
+      const rawStudents = studentsDbTextarea.value.trim();
+      if (rawStudents) {
+        const parsed = parseStudentsDatabase(rawStudents);
+        if (parsed.length > 0) {
+          studentsDatabase = parsed;
+        }
+      }
+
+      populateDropdowns();
+      updateStudentBadge();
+      if (webhookUrl) {
+        noWebhookAlert.classList.add('hidden');
+      } else if (!isStudentMode) {
+        noWebhookAlert.classList.remove('hidden');
+      }
+
+      settingsModal.classList.add('hidden');
+      showToast('База учеников и настройки обновлены!');
+    });
+
+    copyScriptBtn.addEventListener('click', () => {
+      const codeText = document.getElementById('scriptCodeBlock').innerText;
+      const tempTextarea = document.createElement('textarea');
+      tempTextarea.value = codeText;
+      document.body.appendChild(tempTextarea);
+      tempTextarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempTextarea);
+      showToast('Код Apps Script скопирован в буфер!');
+    });
+
+    function renderReviews() {
+      reviewsList.innerHTML = '';
+      reviewsCountText.textContent = `Всего отзывов: ${localReviews.length}`;
+
+      if (localReviews.length === 0) {
+        emptyReviewsNote.classList.remove('hidden');
+        return;
+      }
+      emptyReviewsNote.classList.add('hidden');
+
+      localReviews.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'p-3.5 rounded-2xl border border-slate-100 bg-slate-50 flex flex-col gap-2 text-xs';
+
+        let badgeColor = 'bg-emerald-100 text-emerald-800';
+        let emoji = '😊';
+        if (item.rating === 'Средне') {
+          badgeColor = 'bg-amber-100 text-amber-800';
+          emoji = '😐';
+        } else if (item.rating === 'Плохо') {
+          badgeColor = 'bg-rose-100 text-rose-800';
+          emoji = '🙁';
+        }
+
+        const dateStr = new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded-md font-bold text-[11px] ${badgeColor}">
+                ${emoji} ${item.rating}
+              </span>
+              <span class="font-bold text-slate-800">${item.className}</span>
+              <span class="text-slate-400">•</span>
+              <span class="text-slate-600 font-medium">${item.teacher}</span>
+            </div>
+            <span class="text-[10px] text-slate-400">${dateStr}</span>
+          </div>
+          <div class="font-semibold text-indigo-950">Тема: ${item.topic}</div>
+          <div class="text-slate-600 bg-white p-2.5 rounded-xl border border-slate-100 italic">
+            "${item.detail}"
+          </div>
+          <div class="text-[10px] text-slate-400">
+            Ученик: <span class="font-medium text-slate-700">${item.studentName}</span> (логин: ${item.login})
+          </div>
+        `;
+        reviewsList.appendChild(card);
+      });
+    }
+
+    viewDataBtn.addEventListener('click', () => {
+      renderReviews();
+      dataModal.classList.remove('hidden');
+    });
+
+    closeDataBtn.addEventListener('click', () => dataModal.classList.add('hidden'));
+
+    clearDataBtn.addEventListener('click', () => {
+      localReviews = [];
+      submittedUserIds.clear();
+      renderReviews();
+      updateProjectorView();
+      showToast('Журнал отзывов очищен');
+    });
+
+    exportCsvBtn.addEventListener('click', () => {
+      if (localReviews.length === 0) {
+        showToast('Список отзывов пуст', 'info');
+        return;
+      }
+      let csv = '\uFEFFДата,Класс,Учитель,Тема,Оценка,Подробности,Ученик,Логин\r\n';
+      localReviews.forEach(r => {
+        const row = [
+          new Date(r.timestamp).toLocaleString('ru-RU'),
+          `"${(r.className || '').replace(/"/g, '""')}"`,
+          `"${(r.teacher || '').replace(/"/g, '""')}"`,
+          `"${(r.topic || '').replace(/"/g, '""')}"`,
+          `"${(r.rating || '').replace(/"/g, '""')}"`,
+          `"${(r.detail || '').replace(/"/g, '""')}"`,
+          `"${(r.studentName || '').replace(/"/g, '""')}"`,
+          `"${(r.login || '').replace(/"/g, '""')}"`
+        ];
+        csv += row.join(',') + '\r\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Отзывы_Учеников_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('CSV файл скачан');
+    });
+
+    // Initialize application
+    populateDropdowns();
+  </script>
+</body>
+</html>
